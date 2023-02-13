@@ -107,3 +107,5 @@ And it compiles!
 
 So, before we get into uploading it into the chip and seeing if it works, let’s see the code so far. 
 
+This codebank is labeled Websocket_Server_Via_Async_Rev1
+
