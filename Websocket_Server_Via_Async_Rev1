@@ -1,0 +1,186 @@
+/*********
+ Websocket Server via Async
+  Rui Santos
+  Complete project details at https://RandomNerdTutorials.com/esp32-websocket-server-arduino/
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+*********/
+
+// Import required libraries
+#include <WiFi.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+
+// Replace with your network credentials
+const char* ssid = "NETGEAR76";
+const char* password = "elegantplanet085";
+
+//sensor port and variable name
+float sound =A0;
+
+// Create AsyncWebServer object on port 80
+AsyncWebServer server(80);
+AsyncWebSocket ws("/ws");
+
+
+/*
+Web Page Comments:
+<style> to </style> covers the css formatting
+<script> to </script> has two sections. The first part is the functioning Highcharts container with the window and titles
+The second part is the websocket plotter function, which uses "on.Message(event)" to receive data. This data needs to be sent in the call from ESP
+*/
+
+const char index_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML><html>
+<head>
+  <title>ESP Streaming Audio Waveform</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://code.highcharts.com/8.0/highcharts.js"></script>
+  <link rel="icon" href="data:,">
+
+
+  <style>
+body {
+min-width: 300px;
+max-width: 800px;
+height: 400px;
+margin: 0 auto;
+}
+h2 {
+font-family: Arial;
+font-size: 2.5rem;
+text-align: center;
+}
+</style>
+</head>
+
+
+<body>
+<h2>Streaming Audio Waveform</h2>
+<div id="Audio" class="container"></div>
+
+
+<script>
+var chartA = new Highcharts.Chart({
+chart:{ renderTo : 'Audio' },
+title: { text: 'Waveform' },
+series: [{
+showInLegend: false,
+data: []
+}],
+plotOptions: {
+line: { animation: false,
+dataLabels: { enabled: true }
+},
+series: { color: '#059e8a' }
+},
+xAxis: { type: 'datetime',
+dateTimeLabelFormats: { second: '%H:%M:%S' }
+},
+yAxis: {
+title: { text: 'Volume' }
+},
+credits: { enabled: false }
+});
+
+
+  
+  var gateway = `ws://${window.location.hostname}/ws`;
+  var websocket;
+  window.addEventListener('load', onLoad);
+  function initWebSocket() {
+    console.log('Trying to open a WebSocket connection...');
+    websocket = new WebSocket(gateway);
+    websocket.onopen    = onOpen;
+    websocket.onclose   = onClose;
+    websocket.onmessage = onMessage;
+  }
+  function onOpen(event) {
+    console.log('Connection opened');
+  }
+  function onClose(event) {
+    console.log('Connection closed');
+    setTimeout(initWebSocket, 2000);
+  }
+  function onMessage(event) {
+    var x = (new Date()).getTime(),
+    y = parseFloat(event.data);
+    if(chartA.series[0].data.length > 50) {
+    chartA.series[0].addPoint([x, y], true, true, true);
+    } else {
+    chartA.series[0].addPoint([x, y], true, false, true);
+    };
+  }
+  function onLoad(event) {
+    initWebSocket();
+  }
+</script>
+</body>
+</html>
+)rawliteral";
+
+//////////////////////////////////////////////
+//End Web Page
+//////////////////////////////////////////////
+
+
+//handles new connected clients, and data coming in from clients
+void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
+             void *arg, uint8_t *data, size_t len) {
+  switch (type) {
+    case WS_EVT_CONNECT:
+      Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+      break;
+    case WS_EVT_DISCONNECT:
+      Serial.printf("WebSocket client #%u disconnected\n", client->id());
+      break;
+    case WS_EVT_DATA:
+      break;
+    case WS_EVT_PONG:
+    case WS_EVT_ERROR:
+      break;
+  }
+}
+
+//starts the websocket when requested by the website, listens for incoming data
+void initWebSocket() {
+  ws.onEvent(onEvent);
+  server.addHandler(&ws);
+}
+
+
+void setup(){
+  // Serial port for debugging purposes
+  Serial.begin(38400);
+  
+  // Connect to Wi-Fi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi..");
+  }
+
+  // Print ESP Local IP Address
+  Serial.println(WiFi.localIP());
+
+  initWebSocket();
+
+  // Route for root / web page
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/html", index_html);
+    Serial.println("page loaded");
+  });
+
+  // Start server
+  server.begin();
+}
+
+void loop() {
+ // Read Antennae
+    analogRead(sound);
+      Serial.println(sound);
+
+      //websocket loop
+   ws.textAll(String(sound));
+   ws.cleanupClients();
+}
