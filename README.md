@@ -109,3 +109,14 @@ So, before we get into uploading it into the chip and seeing if it works, let’
 
 This codebank is labeled Websocket_Server_Via_Async_Rev1
 
+Now that we know the files compile, we can put the chips together and run it. Which means waiting for the ESP32 chips to arrive for assembly. 
+
+Looking back at prior exercises, I’ve noticed a subtle drift in the goals of my exercises. I’ve drifted away from trying to post to RStudio and selected Highcharts because the Websocket connection was the most native to wifi communication available. I’m also getting very focused on getting the websocket connection to work, rather than thinking about pre-processing or post-processing the data. So, a couple of additional exercises I can set up with this one are:
+
+1. Link two ESP32’s for the websocket connection, using the receiver as a modem to post to RStudio via serial, or
+2. Setup RStudio to receive data directly via websocket with just one ESP32
+3. Run live analytics on streaming data in RStudio
+4. Run live analytics on streaming data in Highcharts
+5. Integrate up to five sensors on one websocket connection
+6. Long term stability tests
+7. Figure out Machine Learning classification and warning systems on live data
