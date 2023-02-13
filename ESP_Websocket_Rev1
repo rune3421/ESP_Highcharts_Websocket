@@ -1,0 +1,351 @@
+//ESP8266 to Highcharts via Websocket
+//Header
+#include <ESP8266WiFi.h>
+#include <SPI.h>
+#include <WiFi101.h>
+#include <WebSocketServer.h>  //use NINA-Websocket-master
+#include <Base64.h>
+
+char ssid[] = "NETGEAR76"; //  your network SSID (name)
+char pass[] = "elegantplanet085";    // your network password (use for WPA, or use as key for WEP)
+int status = WL_IDLE_STATUS;
+
+int webSocketPort = 80;
+WiFiServer server(webSocketPort);
+WebSocketServer webSocketServer;
+
+//Microphone port and number type
+float sound = A0:
+
+//Functions to call
+  
+void blink() {
+  digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on 
+  delay(100);                       // wait for a second
+  digitalWrite(LED_BUILTIN, LOW);    // turn the LED off 
+  delay(100);                       // wait for a second
+}
+
+//Starts the Wifi Connection
+void WiFiConnect(){
+  
+  // Attempt to connect to Wifi network:
+  while ( status != WL_CONNECTED) {
+    // Connect to WPA/WPA2 network. Change this line if using open or WEP network:
+    status = WiFi.begin(ssid, pass);
+    //Serial.print(" .");
+    // wait 5 seconds to reconnect
+    delay(5000);
+  }
+
+  // you're connected now, so print out the status:
+  printWifiStatus();
+}
+
+void printWifiStatus() {
+  // print the SSID of the network you're attached to:
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // print your WiFi shield's IP address:
+  IPAddress ip = WiFi.localIP();
+ 
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+  
+  // print the received signal strength:
+  long rssi = WiFi.RSSI();
+  Serial.print("signal strength (RSSI):");
+  Serial.println(rssi);
+  Serial.print("WebsoketServer on: http://" ); Serial.print(ip); Serial.println( "/:" + String(webSocketPort) ); 
+}
+
+//////////////////////////////////////////////////////////////////////
+//web page
+/////////////////////////////////////////////////////////////////////
+
+//Arduino Webpage Container
+const char index_html[] PROGMEM = R"webpage(
+<!DOCTYPE HTML>
+
+//Actual webpage
+
+<html>
+<head>
+  <title>Audio Signal Chart</title>
+  
+  <!-- Compressed JavaScript Library  and Themes-->
+  <link rel="stylesheet" href="https://code.jquery.com/ui/1.11.4/themes/smoothness/jquery-ui.css">
+  <script src="https://code.jquery.com/jquery-1.10.2.js"></script>
+  <script src="https://code.jquery.com/ui/1.11.4/jquery-ui.js"></script>  
+ 
+  <!-- Charts Library -->
+  <script src="https://code.highcharts.com/stock/highstock.js"></script>
+  <script src="https://code.highcharts.com/stock/modules/exporting.js"></script>
+  <script src="https://code.highcharts.com/stock/modules/export-data.js"></script>
+      
+  <style>
+    body {
+      font-size: 16px;
+      font-family: verdana,helvetica,arial,sans-serif;
+    }
+  </style>
+</head>
+
+
+<body>
+
+  <div id="container" style="min-width: 310px; height: 600px; margin: 0 auto"></div>
+
+
+  <script>
+    var ws;
+     
+    $(function() { 
+      $("#close").click(function(evt){
+        if( typeof ws != "undefined"){
+          if(ws.readyState != 3 && ws.readyState != 4 ){
+            ws.send("Close");
+            ws.close();
+          }
+        }           
+      });
+      
+      //Open websocket
+      $("#open").click(function(evt){
+        var host = $("#host").val();
+        var port = $("#port").val();
+        var uri = $("#uri").val();
+        //start highstock
+        var mainChart = new Highcharts.stockChart(chartOptions);
+                
+        // create websocket instance
+        ws = new WebSocket("ws://" + host + ":" + port + uri);
+         
+        // Close callback
+        ws.onclose = function(evt) {
+          //change color of labels to red
+          $("#host").css("background", "#ff0000"); 
+          $("#port").css("background", "#ff0000"); 
+          $("#uri").css("background",  "#ff0000");
+          $("div#message_details").hide();
+  
+          };
+  
+        // Open Websocket callback
+        ws.onopen = function(evt) { 
+          //change color of labels to green
+          $("#host").css("background", "#00ff00"); 
+          $("#port").css("background", "#00ff00"); 
+          $("#uri").css("background", "#00ff00");
+          ws.send("Open");
+        };
+        //receive message callback
+        ws.onmessage = function(evt) {
+          var dataStr = [];
+          //dataStr = evt.data.split(","); For use when we add the second sensor back in
+          // Series idx 0=Temp idx 1=Hum 
+          var seriesT = mainChart.series[0];
+          //var seriesH = mainChart.series[1]; For use when we add the second sensor back in
+          var audio = parseFloat(dataStr[0]);
+          //var hum = parseFloat(dataStr[1]); For use when we add the second sensor back in
+          var myEpoch = new Date().getTime(); //get current epoch time                            
+            
+          seriesA.addPoint([myEpoch, audio]);
+          //seriesH.addPoint([myEpoch, hum]); For use when we add the second sensor back in
+        };
+      });
+  });
+    
+  
+  </script>
+  
+  <script>
+    Highcharts.setOptions({
+      global: 
+      {
+        useUTC: false
+      }
+    });
+    
+    var Audiodata;
+    //var humData; For use when we add the second sensor back in
+    var chartOptions = {  
+    chart: {
+      renderTo: 'container',
+      type: 'spline',
+      animation: false,
+    },
+    
+    title: {
+        text: 'Audio Signal from ESP8266'
+    },
+    xAxis:  {
+      type: 'datetime',
+      tickPixelInterval:150,
+      labels: {
+        format: '{value:%H:%M:%S}',
+        rotation: 45,
+        align: 'left'
+      }
+    },
+    yAxis: [{
+      title: {
+        text: 'Volume',
+        style: {
+          color: Highcharts.getOptions().colors[1]
+        }        
+      },
+      tickInterval:1,
+      labels: {
+        format: '{value}°',
+        style: {
+          color: Highcharts.getOptions().colors[1]
+        }
+      },
+      opposite:false,
+    },
+    /*{
+      title: {
+      text: 'Humidity',
+      style: {
+        color: Highcharts.getOptions().colors[0]
+        }
+      },
+      tickInterval:5,
+      max:100,
+      labels: {
+        format: '{value}\%',
+        style: {
+          color: Highcharts.getOptions().colors[0]
+        }
+      },
+      opposite:true
+    }*/],
+
+    rangeSelector: {
+      enabled: true,
+      inputEnabled: false,
+      buttons: [{
+          count: 6,
+          type: 'hour',
+          text: '6h'
+      }, {
+          count: 12,
+          type: 'hour',
+          text: '12h'
+      }, {
+          type: 'all',
+          text: 'All'
+      }],
+    },
+    legend: {
+        enabled: false
+    },
+    exporting:{
+            enabled: false
+    },
+    plotOptions: {
+      series: {
+        animation: false
+      }
+    },
+    
+    series: [{
+      name: 'Audio',
+      data: Audiodata,
+      color: Highcharts.getOptions().colors[1],
+    },
+    /*{
+      name: 'Hum',
+      data: humData,
+      color: Highcharts.getOptions().colors[0],
+      yAxis:1 
+    } */              
+  ]   
+  }
+    
+    
+  </script>
+  
+
+
+  <div id="connection_details">
+      <label for="host">host:</label>
+      <input type="text" id="host" value="192.168.1.19" style="background:#ff0000;"/>
+      <label for="port">port:</label>
+      <input type="text" id="port" value="80" style="background:#ff0000;"/>
+      <label for="uri">uri:  </label>
+      <input type="text" id="uri" value="/ws" style="background:#ff0000;"/>
+      <input type="submit" id="open" value="Open" />
+      <input type="button" id="close" value="Close" />
+  </div>
+    
+  </body>
+</html>
+
+//end actual web page, the next line is the Arduino packaging for PROGMEM
+
+)webpage";
+
+//////////////////////////////////////////////
+//End Web Page
+//////////////////////////////////////////////
+
+//Setup
+void setup() {
+  
+  //Initialize serial
+  Serial.begin(115200);
+
+  // Setup builtin led
+  pinMode(LED_BUILTIN, OUTPUT);
+  // turn the LED OFF (LOW on disconnect)
+  digitalWrite(LED_BUILTIN, LOW);   
+ 
+  Serial.print("Attempting to connect to SSID: ");
+  Serial.println(ssid);
+  //Connect WiFI
+  WiFiConnect();
+  
+
+  
+ // turn the LED on (HIGH on connect)
+  digitalWrite(LED_BUILTIN, HIGH);
+  
+  // start the server:
+  server.begin();
+}
+
+//Loop
+void loop() {
+  //collect data
+  String data = String(analogRead(sound));
+  
+  //Is a client connected?
+  WiFiClient client = server.available();
+  
+  if (client.connected() && webSocketServer.handshake(client)) { //If client connected and handshake with websocket is true continue
+
+    while (client.connected()) { //if client is connected start to blink and send the data
+      blink();
+
+      // This is only to receive the open and close message from the client
+      data = webSocketServer.getData();
+
+      if (data.length() > 0) {
+        //handleClientData(data);
+        Serial.println("Received from Client: " + data);
+      }
+
+      //Get data from microphone and send to the client
+      if ((data) != "") {
+        webSocketServer.sendData(data);
+        //Serial.println(data);
+      }
+    }
+  }
+  
+  // wait to let the client disconnect
+  delay(100);
+}
